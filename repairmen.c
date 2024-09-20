@@ -3,6 +3,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <semaphore.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -19,10 +20,15 @@ void initialize_shared_mem(shared_mem_t *mem) {
         for (int j = 0; j < GRID_SIZE; ++j) {
             mem->grid[i][j].fixed = (bool) (rand() % 2);
         }
+
+    mem->ready_count = 0;
+    sem_init(&mem->ready_lock, 1, 1);
+    sem_init(&mem->action_sync, 1, 0);
 }
 
 void cleanup_shared_mem(shared_mem_t *mem) {
-    // Nothing needs to be done
+    sem_destroy(&mem->ready_lock);
+    sem_destroy(&mem->action_sync);
 }
 
 void initialize_starting_pos(int pos[][2]) {
@@ -49,13 +55,28 @@ void generate_new_pos(int pos[2], int new_pos[2]) {
         new_pos[1] -= 2;
 }
 
-int agent(shared_mem_t *mem, int id) {
+shared_mem_t *mem = NULL;
+
+void signal_ready() {
+    sem_wait(&mem->ready_lock);
+    mem->ready_count ++;
+    if (mem->ready_count == AGENT_COUNT) {
+        mem->ready_count = 0;
+        for (int i = 0; i < AGENT_COUNT; ++i)
+            sem_post(&mem->action_sync);
+    }
+    sem_post(&mem->ready_lock);
+}
+
+int agent(int id) {
+    // Stores number of moves this agent has made
+    int n_moves = 0;
+
     // Stores x,y position for each process
     int pos[AGENT_COUNT][2];
     initialize_starting_pos(pos);
 
     while (true) {
-        printf("Agent %d at (%d,%d)\n", id, pos[id][0], pos[id][1]);
 
         int new_pos[2];
         generate_new_pos(pos[id], new_pos);
@@ -63,7 +84,15 @@ int agent(shared_mem_t *mem, int id) {
         pos[id][0] = new_pos[0];
         pos[id][1] = new_pos[1];
 
-        sleep(1);
+        signal_ready();
+
+        // Wait for all agents to decide on their next action
+        sem_wait(&mem->action_sync);
+
+        n_moves ++;
+        printf("Agent %d moves=%d pos=(%d,%d)\n", id, n_moves, pos[id][0], pos[id][1]);
+
+        sleep(id+1);
     }
 
     return 0;
@@ -89,7 +118,7 @@ int main(int argc, char **argv) {
     }
 
     // Map shared memory to address space
-    shared_mem_t *mem = mmap(NULL,
+    mem = mmap(NULL,
             sizeof(shared_mem_t),
             PROT_READ | PROT_WRITE,
             MAP_SHARED,
@@ -106,7 +135,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < AGENT_COUNT; ++i) {
         pid_t pid = fork();
         if (pid == 0)
-            return agent(mem, i);
+            return agent(i);
     }
 
     // This only runs in parent

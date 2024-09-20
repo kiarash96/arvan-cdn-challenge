@@ -40,6 +40,12 @@ typedef struct {
 typedef struct {
     // The network cells
     cell_t grid[GRID_SIZE][GRID_SIZE];
+
+    int ready_count; // Number of agents that have proposed their next move
+    sem_t ready_lock; // Semaphore for protecting ready_count
+
+    // Semaphore for syncronizing actions between agents
+    sem_t action_sync;
 } shared_mem_t;
 
 #endif // REPAIRMEN_H_
