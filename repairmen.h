@@ -41,11 +41,15 @@ typedef struct {
     // The network cells
     cell_t grid[GRID_SIZE][GRID_SIZE];
 
+    int dest[AGENT_COUNT][2]; // Proposed destination for each agent
+
     int ready_count; // Number of agents that have proposed their next move
     sem_t ready_lock; // Semaphore for protecting ready_count
+    sem_t action_sync; // Semaphore for synchronizing when all agents have proposed their next move
 
-    // Semaphore for syncronizing actions between agents
-    sem_t action_sync;
+    int done_count; // Number of agents that have done their action
+    sem_t done_lock; // Semaphore for protecting done_count
+    sem_t done_sync; // Semaphore for synchronizing when all agents have done their move
 } shared_mem_t;
 
 #endif // REPAIRMEN_H_

@@ -24,11 +24,17 @@ void initialize_shared_mem(shared_mem_t *mem) {
     mem->ready_count = 0;
     sem_init(&mem->ready_lock, 1, 1);
     sem_init(&mem->action_sync, 1, 0);
+
+    mem->done_count = 0;
+    sem_init(&mem->done_lock, 1, 1);
+    sem_init(&mem->done_sync, 1, 0);
 }
 
 void cleanup_shared_mem(shared_mem_t *mem) {
     sem_destroy(&mem->ready_lock);
     sem_destroy(&mem->action_sync);
+    sem_destroy(&mem->done_lock);
+    sem_destroy(&mem->done_sync);
 }
 
 void initialize_starting_pos(int pos[][2]) {
@@ -55,6 +61,50 @@ void generate_new_pos(int pos[2], int new_pos[2]) {
         new_pos[1] -= 2;
 }
 
+void update_positions(int pos[][2], int dest[][2]) {
+    int new_pos[AGENT_COUNT][2];
+
+    // Unset all positions
+    for (int i = 0; i < AGENT_COUNT; ++i)
+        new_pos[i][0] = new_pos[i][1] = -1;
+
+    // If any agents wants to stay where it is it is prioritize over moving
+    for (int i = 0; i < AGENT_COUNT; ++i)
+        if (pos[i][0] == dest[i][0] && pos[i][1] == dest[i][1]) {
+            new_pos[i][0] = pos[i][0];
+            new_pos[i][1] = pos[i][1];
+        }
+
+    // Agents with lower index have higher priority if there's a conflict
+    for (int i = 0; i < AGENT_COUNT; ++i) {
+        bool dest_occupied = false;
+
+        for (int j = 0; j < AGENT_COUNT; ++j)
+            if (new_pos[j][0] != -1 && new_pos[j][1] != -1
+                && dest[i][0] == new_pos[j][0] && dest[i][1] == new_pos[j][1])
+            {
+                dest_occupied = true;
+                break;
+            }
+
+        // The agent stays where it is if its destination is occupied by a higher priority agent
+        if (dest_occupied) {
+            new_pos[i][0] = pos[i][0];
+            new_pos[i][1] = pos[i][1];
+        }
+        else {
+            new_pos[i][0] = dest[i][0];
+            new_pos[i][1] = dest[i][1];
+        }
+    }
+
+    // Copy new_pos into pos
+    for (int i = 0; i < AGENT_COUNT; ++i) {
+        pos[i][0] = new_pos[i][0];
+        pos[i][1] = new_pos[i][1];
+    }
+}
+
 shared_mem_t *mem = NULL;
 
 void signal_ready() {
@@ -66,6 +116,17 @@ void signal_ready() {
             sem_post(&mem->action_sync);
     }
     sem_post(&mem->ready_lock);
+}
+
+void signal_done() {
+    sem_wait(&mem->done_lock);
+    mem->done_count ++;
+    if (mem->done_count == AGENT_COUNT) {
+        mem->done_count = 0;
+        for (int i = 0; i < AGENT_COUNT; ++i)
+            sem_post(&mem->done_sync);
+    }
+    sem_post(&mem->done_lock);
 }
 
 int agent(int id) {
@@ -81,16 +142,21 @@ int agent(int id) {
         int new_pos[2];
         generate_new_pos(pos[id], new_pos);
 
-        pos[id][0] = new_pos[0];
-        pos[id][1] = new_pos[1];
+        mem->dest[id][0] = new_pos[0];
+        mem->dest[id][1] = new_pos[1];
 
+        // Signal proposed move and wait for all agents to decide on their next action
         signal_ready();
-
-        // Wait for all agents to decide on their next action
         sem_wait(&mem->action_sync);
+
+        update_positions(pos, mem->dest);
 
         n_moves ++;
         printf("Agent %d moves=%d pos=(%d,%d)\n", id, n_moves, pos[id][0], pos[id][1]);
+
+        // Signal end of move and wait for all agents to do their move
+        signal_done();
+        sem_wait(&mem->done_sync);
 
         sleep(id+1);
     }
