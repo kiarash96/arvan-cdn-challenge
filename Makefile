@@ -1,4 +1,4 @@
-repairmen: repairmen.c
+repairmen: repairmen.c repairmen.h
 	cc repairmen.c -o repairmen -O2 -Wall
 
 clean:
