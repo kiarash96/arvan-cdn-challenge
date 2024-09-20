@@ -7,8 +7,20 @@
 // Width and height of the network grid
 #define GRID_SIZE 7
 
+// Number of available directions for a move
+#define DIRECTION_COUNT 5
+
 // Name of the shared memory file in kernel filesystem
 #define SHM_NAME "/repairmen"
+
+// x and y delta for each move
+static const int MOVE_DELTA[DIRECTION_COUNT][2] = {
+    {0,  0}, // Staying stationary
+    {0, +1},
+    {0, -1},
+    {+1, 0},
+    {-1, 0}
+};
 
 // Start position for each repairmen
 static const int STARTING_POS[AGENT_COUNT][2] = {

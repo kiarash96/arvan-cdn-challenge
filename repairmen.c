@@ -32,12 +32,39 @@ void initialize_starting_pos(int pos[][2]) {
     }
 }
 
+void generate_new_pos(int pos[2], int new_pos[2]) {
+    // Choose direction at random
+    int index = rand() % DIRECTION_COUNT;
+    new_pos[0] = pos[0] + MOVE_DELTA[index][0],
+    new_pos[1] = pos[1] + MOVE_DELTA[index][1];
+
+    // Reverse the direction if we go out of the bounds
+    if (new_pos[0] < 0)
+        new_pos[0] += 2;
+    if (GRID_SIZE - 1 < new_pos[0])
+        new_pos[0] -= 2;
+    if (new_pos[1] < 0)
+        new_pos[1] += 2;
+    if (GRID_SIZE - 1 < new_pos[1])
+        new_pos[1] -= 2;
+}
+
 int agent(shared_mem_t *mem, int id) {
     // Stores x,y position for each process
     int pos[AGENT_COUNT][2];
     initialize_starting_pos(pos);
 
-    printf("Agent %d at (%d,%d)\n", id, pos[id][0], pos[id][1]);
+    while (true) {
+        printf("Agent %d at (%d,%d)\n", id, pos[id][0], pos[id][1]);
+
+        int new_pos[2];
+        generate_new_pos(pos[id], new_pos);
+
+        pos[id][0] = new_pos[0];
+        pos[id][1] = new_pos[1];
+
+        sleep(1);
+    }
 
     return 0;
 }
