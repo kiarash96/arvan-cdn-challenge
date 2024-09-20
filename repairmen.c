@@ -25,8 +25,20 @@ void cleanup_shared_mem(shared_mem_t *mem) {
     // Nothing needs to be done
 }
 
+void initialize_starting_pos(int pos[][2]) {
+    for (int i = 0; i < AGENT_COUNT; ++i) {
+        pos[i][0] = STARTING_POS[i][0];
+        pos[i][1] = STARTING_POS[i][1];
+    }
+}
+
 int agent(shared_mem_t *mem, int id) {
-    printf("Agent %d running!\n", id);
+    // Stores x,y position for each process
+    int pos[AGENT_COUNT][2];
+    initialize_starting_pos(pos);
+
+    printf("Agent %d at (%d,%d)\n", id, pos[id][0], pos[id][1]);
+
     return 0;
 }
 

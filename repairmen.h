@@ -10,6 +10,14 @@
 // Name of the shared memory file in kernel filesystem
 #define SHM_NAME "/repairmen"
 
+// Start position for each repairmen
+static const int STARTING_POS[AGENT_COUNT][2] = {
+    {0, 0},
+    {0, GRID_SIZE-1},
+    {GRID_SIZE-1, 0},
+    {GRID_SIZE-1, GRID_SIZE-1}
+};
+
 // Describes a single cell in the grid
 typedef struct {
     // True if this cell is fixed, false if it needs to be repaired
