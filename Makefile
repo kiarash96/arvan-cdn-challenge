@@ -5,4 +5,4 @@ clean:
 	rm -f repairmen
 
 run: repairmen
-	./repairmen
+	./repairmen $(TARGETS)

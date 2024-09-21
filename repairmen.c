@@ -135,7 +135,7 @@ void signal_done() {
     sem_post(&mem->done_lock);
 }
 
-int agent(int id) {
+int agent(int id, int target) {
     // Stores number of moves this agent has made
     int n_moves = 0;
 
@@ -198,6 +198,20 @@ int main(int argc, char **argv) {
     // Initialize random seed
     srand(time(NULL));
 
+    int targets[AGENT_COUNT];
+    if (argc != 1 + AGENT_COUNT) {
+        printf("Usage: ./repairmen [target1] [target2] [target3] [target4]\n");
+        return -1;
+    }
+
+    for (int i = 0; i < AGENT_COUNT; ++i) {
+        targets[i] = strtol(argv[i+1], NULL, 0);
+        if (targets[i] <= 0) {
+            printf("Error: Each target must be a positive integer\n");
+            return -1;
+        }
+    }
+
     // Create shared memory object
     int fd = shm_open(SHM_NAME,
             O_CREAT | O_RDWR,
@@ -231,7 +245,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < AGENT_COUNT; ++i) {
         pid_t pid = fork();
         if (pid == 0)
-            return agent(i);
+            return agent(i, targets[i]);
     }
 
     // This only runs in parent
