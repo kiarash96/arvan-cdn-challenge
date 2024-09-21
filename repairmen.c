@@ -15,10 +15,13 @@
 #include "repairmen.h"
 
 void initialize_shared_mem(shared_mem_t *mem) {
-    // Set fixed status for grid cells at random
     for (int i = 0; i < GRID_SIZE; ++i)
         for (int j = 0; j < GRID_SIZE; ++j) {
+            // Set fixed status for grid cells at random
             mem->grid[i][j].fixed = (bool) (rand() % 2);
+
+            for (int k = 0; k < AGENT_COUNT; ++k)
+                mem->grid[i][j].log[k] = 0;
         }
 
     mem->ready_count = 0;
@@ -158,13 +161,15 @@ int agent(int id) {
         signal_ready();
         sem_wait(&mem->action_sync);
 
+        cell_t *cell = &mem->grid[pos[id][0]][pos[id][1]];
         if (mem->action[id] == ACT_REPAIR) {
-            mem->grid[pos[id][0]][pos[id][1]].fixed = true;
+            cell->fixed = true;
             n_fixed ++;
         }
         else if (pos[id][0] != mem->dest[id][0] || pos[id][1] != mem->dest[id][1]) {
             n_moves ++;
         }
+        cell->log[id] = n_fixed;
         update_positions(pos, mem->dest);
 
         printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, n_fixed, pos[id][0], pos[id][1]);

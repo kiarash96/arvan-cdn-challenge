@@ -40,6 +40,9 @@ typedef enum {
 typedef struct {
     // True if this cell is fixed, false if it needs to be repaired
     bool fixed;
+
+    // Last recorded number of cells each agent has fixed when visiting this cell
+    int log[AGENT_COUNT];
 } cell_t;
 
 // Describes the data shared between agents
