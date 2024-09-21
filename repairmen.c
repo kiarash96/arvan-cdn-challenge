@@ -146,13 +146,21 @@ int agent(int id, int target) {
     int fixed[AGENT_COUNT] = {0};
 
     while (true) {
-
         // Pointer to the cell we're currently in
         cell_t *cell = &mem->grid[pos[id][0]][pos[id][1]];
 
         for (int i = 0; i < AGENT_COUNT; ++i)
             if (fixed[i] < cell->log[i])
                 fixed[i] = cell->log[i];
+
+        // Check exit condition
+        int total_fixed = 0;
+        for (int i = 0; i < AGENT_COUNT; ++i)
+            total_fixed += fixed[i];
+        if (fixed[id] == target || total_fixed == mem->total_broken) {
+            printf("Agent %d exited with %d moves\n", id, n_moves);
+            break;
+        }
 
         if (cell->fixed) {
             int new_pos[2];
