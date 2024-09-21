@@ -15,10 +15,13 @@
 #include "repairmen.h"
 
 void initialize_shared_mem(shared_mem_t *mem) {
+    mem->total_broken = 0;
     for (int i = 0; i < GRID_SIZE; ++i)
         for (int j = 0; j < GRID_SIZE; ++j) {
             // Set fixed status for grid cells at random
-            mem->grid[i][j].fixed = (bool) (rand() % 2);
+            bool broken = (bool) (rand() % 2);
+            mem->grid[i][j].fixed = !broken;
+            mem->total_broken += broken;
 
             for (int k = 0; k < AGENT_COUNT; ++k)
                 mem->grid[i][j].log[k] = 0;
@@ -134,16 +137,24 @@ void signal_done() {
 
 int agent(int id) {
     // Stores number of moves this agent has made
-    int n_moves = 0,
-        n_fixed = 0;
+    int n_moves = 0;
 
     // Stores x,y position for each process
     int pos[AGENT_COUNT][2];
     initialize_starting_pos(pos);
 
+    int fixed[AGENT_COUNT] = {0};
+
     while (true) {
 
-        if (mem->grid[pos[id][0]][pos[id][1]].fixed) {
+        // Pointer to the cell we're currently in
+        cell_t *cell = &mem->grid[pos[id][0]][pos[id][1]];
+
+        for (int i = 0; i < AGENT_COUNT; ++i)
+            if (fixed[i] < cell->log[i])
+                fixed[i] = cell->log[i];
+
+        if (cell->fixed) {
             int new_pos[2];
             generate_new_pos(pos[id], new_pos);
 
@@ -161,18 +172,17 @@ int agent(int id) {
         signal_ready();
         sem_wait(&mem->action_sync);
 
-        cell_t *cell = &mem->grid[pos[id][0]][pos[id][1]];
         if (mem->action[id] == ACT_REPAIR) {
             cell->fixed = true;
-            n_fixed ++;
+            fixed[id] ++;
         }
         else if (pos[id][0] != mem->dest[id][0] || pos[id][1] != mem->dest[id][1]) {
             n_moves ++;
         }
-        cell->log[id] = n_fixed;
+        cell->log[id] = fixed[id];
         update_positions(pos, mem->dest);
 
-        printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, n_fixed, pos[id][0], pos[id][1]);
+        printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, fixed[id], pos[id][0], pos[id][1]);
 
         // Signal end of move and wait for all agents to do their move
         signal_done();

@@ -47,8 +47,8 @@ typedef struct {
 
 // Describes the data shared between agents
 typedef struct {
-    // The network cells
-    cell_t grid[GRID_SIZE][GRID_SIZE];
+    int total_broken;
+    cell_t grid[GRID_SIZE][GRID_SIZE]; // The network cells
 
     action_t action[AGENT_COUNT]; // Proposed action for each agent
     int dest[AGENT_COUNT][2]; // Proposed destination for each agent
