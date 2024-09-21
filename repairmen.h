@@ -30,6 +30,12 @@ static const int STARTING_POS[AGENT_COUNT][2] = {
     {GRID_SIZE-1, GRID_SIZE-1}
 };
 
+// Describes actions available to agents at each step
+typedef enum {
+    ACT_MOVE,
+    ACT_REPAIR
+} action_t;
+
 // Describes a single cell in the grid
 typedef struct {
     // True if this cell is fixed, false if it needs to be repaired
@@ -41,6 +47,7 @@ typedef struct {
     // The network cells
     cell_t grid[GRID_SIZE][GRID_SIZE];
 
+    action_t action[AGENT_COUNT]; // Proposed action for each agent
     int dest[AGENT_COUNT][2]; // Proposed destination for each agent
 
     int ready_count; // Number of agents that have proposed their next move

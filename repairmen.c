@@ -131,7 +131,8 @@ void signal_done() {
 
 int agent(int id) {
     // Stores number of moves this agent has made
-    int n_moves = 0;
+    int n_moves = 0,
+        n_fixed = 0;
 
     // Stores x,y position for each process
     int pos[AGENT_COUNT][2];
@@ -139,20 +140,34 @@ int agent(int id) {
 
     while (true) {
 
-        int new_pos[2];
-        generate_new_pos(pos[id], new_pos);
+        if (mem->grid[pos[id][0]][pos[id][1]].fixed) {
+            int new_pos[2];
+            generate_new_pos(pos[id], new_pos);
 
-        mem->dest[id][0] = new_pos[0];
-        mem->dest[id][1] = new_pos[1];
+            mem->action[id] = ACT_MOVE;
+            mem->dest[id][0] = new_pos[0];
+            mem->dest[id][1] = new_pos[1];
+        }
+        else { // Cell needs to be fixed
+            mem->action[id] = ACT_REPAIR;
+            mem->dest[id][0] = pos[id][0];
+            mem->dest[id][1] = pos[id][1];
+        }
 
         // Signal proposed move and wait for all agents to decide on their next action
         signal_ready();
         sem_wait(&mem->action_sync);
 
+        if (mem->action[id] == ACT_REPAIR) {
+            mem->grid[pos[id][0]][pos[id][1]].fixed = true;
+            n_fixed ++;
+        }
+        else if (pos[id][0] != mem->dest[id][0] || pos[id][1] != mem->dest[id][1]) {
+            n_moves ++;
+        }
         update_positions(pos, mem->dest);
 
-        n_moves ++;
-        printf("Agent %d moves=%d pos=(%d,%d)\n", id, n_moves, pos[id][0], pos[id][1]);
+        printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, n_fixed, pos[id][0], pos[id][1]);
 
         // Signal end of move and wait for all agents to do their move
         signal_done();
