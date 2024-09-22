@@ -119,9 +119,7 @@ void update_positions(int pos[][2], action_t action[], int dest[][2]) {
     }
 }
 
-shared_mem_t *mem = NULL;
-
-void signal_death() {
+void signal_death(shared_mem_t *mem) {
     sem_wait(&mem->ready_lock);
     mem->alive_count --;
     if (mem->ready_count == mem->alive_count) {
@@ -132,7 +130,7 @@ void signal_death() {
     sem_post(&mem->ready_lock);
 }
 
-void signal_ready() {
+void signal_ready(shared_mem_t *mem) {
     sem_wait(&mem->ready_lock);
     mem->ready_count ++;
     if (mem->ready_count == mem->alive_count) {
@@ -143,7 +141,7 @@ void signal_ready() {
     sem_post(&mem->ready_lock);
 }
 
-void signal_done() {
+void signal_done(shared_mem_t *mem) {
     sem_wait(&mem->done_lock);
     mem->done_count ++;
     if (mem->done_count == mem->alive_count) {
@@ -154,7 +152,7 @@ void signal_done() {
     sem_post(&mem->done_lock);
 }
 
-int agent(int id, int target) {
+int agent(shared_mem_t *mem, int id, int target) {
     // Stores number of moves this agent has made
     int n_moves = 0;
 
@@ -193,11 +191,11 @@ int agent(int id, int target) {
 
         if (mem->action[id] == ACT_DIE) {
             printf("Agent %d exited with %d moves and %d fixes\n", id+1, n_moves, fixed[id]);
-            signal_death();
+            signal_death(mem);
             break;
         }
         else {
-            signal_ready();
+            signal_ready(mem);
         }
 
         // Signal proposed move and wait for all agents to decide on their next action
@@ -216,80 +214,11 @@ int agent(int id, int target) {
         //printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, fixed[id], pos[id][0], pos[id][1]);
 
         // Signal end of move and wait for all agents to do their move
-        signal_done();
+        signal_done(mem);
         sem_wait(&mem->done_sync);
 
         usleep((id+1) * 10 * 1000);
     }
-
-    return 0;
-}
-
-int main(int argc, char **argv) {
-    // Initialize random seed
-    srand(time(NULL));
-
-    int targets[AGENT_COUNT];
-    if (argc != 1 + AGENT_COUNT) {
-        printf("Usage: ./repairmen [target1] [target2] [target3] [target4]\n");
-        return -1;
-    }
-
-    for (int i = 0; i < AGENT_COUNT; ++i) {
-        targets[i] = strtol(argv[i+1], NULL, 0);
-        if (targets[i] <= 0) {
-            printf("Error: Each target must be a positive integer\n");
-            return -1;
-        }
-    }
-
-    // Create shared memory object
-    int fd = shm_open(SHM_NAME,
-            O_CREAT | O_RDWR,
-            S_IRUSR | S_IWUSR);
-    if (fd == -1) {
-        printf("shm_open failed: %s\n", strerror(errno));
-        return -1;
-    }
-
-    // Set shared memory size
-    if (ftruncate(fd, sizeof(shared_mem_t)) == -1) {
-        printf("ftruncate failed: %s\n", strerror(errno));
-        return -1;
-    }
-
-    // Map shared memory to address space
-    mem = mmap(NULL,
-            sizeof(shared_mem_t),
-            PROT_READ | PROT_WRITE,
-            MAP_SHARED,
-            fd,
-            0);
-    if (mem == MAP_FAILED) {
-        printf("mmap failed: %s\n", strerror(errno));
-        return -1;
-    }
-
-    initialize_shared_mem(mem);
-
-    // Spawn child processes
-    for (int i = 0; i < AGENT_COUNT; ++i) {
-        pid_t pid = fork();
-        if (pid == 0)
-            return agent(i, targets[i]);
-    }
-
-    // This only runs in parent
-
-    // Wait for all child processes to exit
-    for (int i = 0; i < AGENT_COUNT; ++i)
-        wait(NULL);
-    printf("All child processes exited.\n");
-
-    // Cleanup and delete shared memory
-    cleanup_shared_mem(mem);
-    munmap(mem, sizeof(shared_mem_t));
-    shm_unlink(SHM_NAME);
 
     return 0;
 }
