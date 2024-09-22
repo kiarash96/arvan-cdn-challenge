@@ -74,8 +74,11 @@ typedef struct {
  * synchronization mechanisms for agents.
  *
  * @param[in] mem   Pointer to the shared memory structure
+ *
+ * @retval 0        Initialization is successfully done
+ * @retval other    Some error occured. Sets errno to indicate error
  */
-void initialize_shared_mem(shared_mem_t *mem);
+int initialize_shared_mem(shared_mem_t *mem);
 
 /**
  * @brief Cleanup the shared memory

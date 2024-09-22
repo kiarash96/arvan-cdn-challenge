@@ -61,6 +61,8 @@ int main(int argc, char *argv[]) {
 
     initialize_shared_mem(mem);
 
+    printf("total_broken=%d\n", mem->total_broken);
+
     // Spawn child processes
     for (int i = 0; i < AGENT_COUNT; ++i) {
         pid_t pid = fork();

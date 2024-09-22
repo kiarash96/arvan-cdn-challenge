@@ -14,7 +14,9 @@
 
 #include "repairmen.h"
 
-void initialize_shared_mem(shared_mem_t *mem) {
+int initialize_shared_mem(shared_mem_t *mem) {
+    int status = 0;
+
     mem->total_broken = 0;
     for (int i = 0; i < GRID_SIZE; ++i)
         for (int j = 0; j < GRID_SIZE; ++j) {
@@ -27,16 +29,27 @@ void initialize_shared_mem(shared_mem_t *mem) {
                 mem->grid[i][j].log[k] = 0;
         }
 
-    printf("total_broken=%d\n", mem->total_broken);
-
     mem->alive_count = AGENT_COUNT;
     mem->ready_count = 0;
-    sem_init(&mem->ready_lock, 1, 1);
-    sem_init(&mem->action_sync, 1, 0);
-
     mem->done_count = 0;
-    sem_init(&mem->done_lock, 1, 1);
-    sem_init(&mem->done_sync, 1, 0);
+
+    status = sem_init(&mem->ready_lock, 1, 1);
+    if (status != 0)
+        return status;
+
+    status = sem_init(&mem->action_sync, 1, 0);
+    if (status != 0)
+        return status;
+
+    status = sem_init(&mem->done_lock, 1, 1);
+    if (status != 0)
+        return status;
+
+    status = sem_init(&mem->done_sync, 1, 0);
+    if (status != 0)
+        return status;
+
+    return 0;
 }
 
 void cleanup_shared_mem(shared_mem_t *mem) {
