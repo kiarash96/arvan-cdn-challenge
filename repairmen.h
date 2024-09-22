@@ -33,7 +33,8 @@ static const int STARTING_POS[AGENT_COUNT][2] = {
 // Describes actions available to agents at each step
 typedef enum {
     ACT_MOVE,
-    ACT_REPAIR
+    ACT_REPAIR,
+    ACT_DIE
 } action_t;
 
 // Describes a single cell in the grid
@@ -52,6 +53,8 @@ typedef struct {
 
     action_t action[AGENT_COUNT]; // Proposed action for each agent
     int dest[AGENT_COUNT][2]; // Proposed destination for each agent
+
+    int alive_count; // Number of agents still operating on the grid
 
     int ready_count; // Number of agents that have proposed their next move
     sem_t ready_lock; // Semaphore for protecting ready_count

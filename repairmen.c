@@ -27,6 +27,9 @@ void initialize_shared_mem(shared_mem_t *mem) {
                 mem->grid[i][j].log[k] = 0;
         }
 
+    printf("total_broken=%d\n", mem->total_broken);
+
+    mem->alive_count = AGENT_COUNT;
     mem->ready_count = 0;
     sem_init(&mem->ready_lock, 1, 1);
     sem_init(&mem->action_sync, 1, 0);
@@ -67,7 +70,7 @@ void generate_new_pos(int pos[2], int new_pos[2]) {
         new_pos[1] -= 2;
 }
 
-void update_positions(int pos[][2], int dest[][2]) {
+void update_positions(int pos[][2], action_t action[], int dest[][2]) {
     int new_pos[AGENT_COUNT][2];
 
     // Unset all positions
@@ -76,13 +79,18 @@ void update_positions(int pos[][2], int dest[][2]) {
 
     // If any agents wants to stay where it is it is prioritize over moving
     for (int i = 0; i < AGENT_COUNT; ++i)
-        if (pos[i][0] == dest[i][0] && pos[i][1] == dest[i][1]) {
+        if (action[i] == ACT_REPAIR ||
+            (action[i] == ACT_MOVE && pos[i][0] == dest[i][0] && pos[i][1] == dest[i][1])) {
+
             new_pos[i][0] = pos[i][0];
             new_pos[i][1] = pos[i][1];
         }
 
     // Agents with lower index have higher priority if there's a conflict
     for (int i = 0; i < AGENT_COUNT; ++i) {
+        if (action[i] != ACT_MOVE)
+            continue;
+
         bool dest_occupied = false;
 
         for (int j = 0; j < AGENT_COUNT; ++j)
@@ -113,12 +121,23 @@ void update_positions(int pos[][2], int dest[][2]) {
 
 shared_mem_t *mem = NULL;
 
+void signal_death() {
+    sem_wait(&mem->ready_lock);
+    mem->alive_count --;
+    if (mem->ready_count == mem->alive_count) {
+        mem->ready_count = 0;
+        for (int i = 0; i < mem->alive_count; ++i)
+            sem_post(&mem->action_sync);
+    }
+    sem_post(&mem->ready_lock);
+}
+
 void signal_ready() {
     sem_wait(&mem->ready_lock);
     mem->ready_count ++;
-    if (mem->ready_count == AGENT_COUNT) {
+    if (mem->ready_count == mem->alive_count) {
         mem->ready_count = 0;
-        for (int i = 0; i < AGENT_COUNT; ++i)
+        for (int i = 0; i < mem->alive_count; ++i)
             sem_post(&mem->action_sync);
     }
     sem_post(&mem->ready_lock);
@@ -127,9 +146,9 @@ void signal_ready() {
 void signal_done() {
     sem_wait(&mem->done_lock);
     mem->done_count ++;
-    if (mem->done_count == AGENT_COUNT) {
+    if (mem->done_count == mem->alive_count) {
         mem->done_count = 0;
-        for (int i = 0; i < AGENT_COUNT; ++i)
+        for (int i = 0; i < mem->alive_count; ++i)
             sem_post(&mem->done_sync);
     }
     sem_post(&mem->done_lock);
@@ -158,11 +177,9 @@ int agent(int id, int target) {
         for (int i = 0; i < AGENT_COUNT; ++i)
             total_fixed += fixed[i];
         if (fixed[id] == target || total_fixed == mem->total_broken) {
-            printf("Agent %d exited with %d moves\n", id, n_moves);
-            break;
+            mem->action[id] = ACT_DIE;
         }
-
-        if (cell->fixed) {
+        else if (cell->fixed) {
             int new_pos[2];
             generate_new_pos(pos[id], new_pos);
 
@@ -172,12 +189,18 @@ int agent(int id, int target) {
         }
         else { // Cell needs to be fixed
             mem->action[id] = ACT_REPAIR;
-            mem->dest[id][0] = pos[id][0];
-            mem->dest[id][1] = pos[id][1];
+        }
+
+        if (mem->action[id] == ACT_DIE) {
+            printf("Agent %d exited with %d moves and %d fixes\n", id+1, n_moves, fixed[id]);
+            signal_death();
+            break;
+        }
+        else {
+            signal_ready();
         }
 
         // Signal proposed move and wait for all agents to decide on their next action
-        signal_ready();
         sem_wait(&mem->action_sync);
 
         if (mem->action[id] == ACT_REPAIR) {
@@ -188,15 +211,15 @@ int agent(int id, int target) {
             n_moves ++;
         }
         cell->log[id] = fixed[id];
-        update_positions(pos, mem->dest);
+        update_positions(pos, mem->action, mem->dest);
 
-        printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, fixed[id], pos[id][0], pos[id][1]);
+        //printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, fixed[id], pos[id][0], pos[id][1]);
 
         // Signal end of move and wait for all agents to do their move
         signal_done();
         sem_wait(&mem->done_sync);
 
-        sleep(id+1);
+        usleep((id+1) * 10 * 1000);
     }
 
     return 0;
