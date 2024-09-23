@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "barrier.h"
 #include "repairmen.h"
 
 int initialize_shared_mem(shared_mem_t *mem) {
@@ -29,23 +30,11 @@ int initialize_shared_mem(shared_mem_t *mem) {
                 mem->grid[i][j].log[k] = 0;
         }
 
-    mem->alive_count = AGENT_COUNT;
-    mem->ready_count = 0;
-    mem->done_count = 0;
-
-    status = sem_init(&mem->ready_lock, 1, 1);
+    status = barrier_init(&mem->ready_barrier, AGENT_COUNT);
     if (status != 0)
         return status;
 
-    status = sem_init(&mem->action_sync, 1, 0);
-    if (status != 0)
-        return status;
-
-    status = sem_init(&mem->done_lock, 1, 1);
-    if (status != 0)
-        return status;
-
-    status = sem_init(&mem->done_sync, 1, 0);
+    status = barrier_init(&mem->done_barrier, AGENT_COUNT);
     if (status != 0)
         return status;
 
@@ -53,10 +42,8 @@ int initialize_shared_mem(shared_mem_t *mem) {
 }
 
 void cleanup_shared_mem(shared_mem_t *mem) {
-    sem_destroy(&mem->ready_lock);
-    sem_destroy(&mem->action_sync);
-    sem_destroy(&mem->done_lock);
-    sem_destroy(&mem->done_sync);
+    barrier_cleanup(&mem->ready_barrier);
+    barrier_cleanup(&mem->done_barrier);
 }
 
 void initialize_starting_pos(int pos[][2]) {
@@ -132,39 +119,6 @@ void update_positions(int pos[][2], action_t action[], int dest[][2]) {
     }
 }
 
-void signal_death(shared_mem_t *mem) {
-    sem_wait(&mem->ready_lock);
-    mem->alive_count --;
-    if (mem->ready_count == mem->alive_count) {
-        mem->ready_count = 0;
-        for (int i = 0; i < mem->alive_count; ++i)
-            sem_post(&mem->action_sync);
-    }
-    sem_post(&mem->ready_lock);
-}
-
-void signal_ready(shared_mem_t *mem) {
-    sem_wait(&mem->ready_lock);
-    mem->ready_count ++;
-    if (mem->ready_count == mem->alive_count) {
-        mem->ready_count = 0;
-        for (int i = 0; i < mem->alive_count; ++i)
-            sem_post(&mem->action_sync);
-    }
-    sem_post(&mem->ready_lock);
-}
-
-void signal_done(shared_mem_t *mem) {
-    sem_wait(&mem->done_lock);
-    mem->done_count ++;
-    if (mem->done_count == mem->alive_count) {
-        mem->done_count = 0;
-        for (int i = 0; i < mem->alive_count; ++i)
-            sem_post(&mem->done_sync);
-    }
-    sem_post(&mem->done_lock);
-}
-
 int agent(shared_mem_t *mem, int id, int target) {
     // Stores number of moves this agent has made
     int n_moves = 0;
@@ -204,15 +158,16 @@ int agent(shared_mem_t *mem, int id, int target) {
 
         if (mem->action[id] == ACT_DIE) {
             printf("Agent %d exited with %d moves and %d fixes\n", id+1, n_moves, fixed[id]);
-            signal_death(mem);
+            barrier_signal_exit(&mem->ready_barrier);
+            barrier_signal_exit(&mem->done_barrier);
             break;
         }
         else {
-            signal_ready(mem);
+            barrier_signal_ready(&mem->ready_barrier);
         }
 
         // Signal proposed move and wait for all agents to decide on their next action
-        sem_wait(&mem->action_sync);
+        barrier_wait_for_all(&mem->ready_barrier);
 
         if (mem->action[id] == ACT_REPAIR) {
             cell->fixed = true;
@@ -227,8 +182,8 @@ int agent(shared_mem_t *mem, int id, int target) {
         //printf("Agent %d moves=%d fixed=%d pos=(%d,%d)\n", id, n_moves, fixed[id], pos[id][0], pos[id][1]);
 
         // Signal end of move and wait for all agents to do their move
-        signal_done(mem);
-        sem_wait(&mem->done_sync);
+        barrier_signal_ready(&mem->done_barrier);
+        barrier_wait_for_all(&mem->done_barrier);
 
         usleep((id+1) * 10 * 1000);
     }

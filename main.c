@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "barrier.h"
 #include "repairmen.h"
 
 int main(int argc, char *argv[]) {

@@ -56,15 +56,8 @@ typedef struct {
     action_t action[AGENT_COUNT];   ///< Proposed action for each agent
     int dest[AGENT_COUNT][2];       ///< Proposed destination (x,y) pair for each agent
 
-    int alive_count;    ///< Number of agents still operating on the grid
-
-    int ready_count;    ///< Number of agents that have proposed their next move
-    sem_t ready_lock;   ///< Semaphore for protecting ready_count
-    sem_t action_sync;  ///< Semaphore for synchronizing when all agents have proposed their next move
-
-    int done_count;     ///< Number of agents that have done their action
-    sem_t done_lock;    ///< Semaphore for protecting done_count
-    sem_t done_sync;    ///< Semaphore for synchronizing when all agents have done their move
+    barrier_t ready_barrier;    ///< Synchronization barrier for when all agents have proposed their next move
+    barrier_t done_barrier;     ///< Synchronization barrier for when all agents have done their move
 } shared_mem_t;
 
 /**
