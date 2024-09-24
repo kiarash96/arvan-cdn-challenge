@@ -53,11 +53,13 @@ void initialize_starting_pos(int pos[][2]) {
     }
 }
 
-void generate_new_pos(int pos[2], int new_pos[2]) {
-    // Choose direction at random
-    int index = rand() % DIRECTION_COUNT;
-    new_pos[0] = pos[0] + MOVE_DELTA[index][0],
-    new_pos[1] = pos[1] + MOVE_DELTA[index][1];
+bool is_pos_equal(int first[2], int second[2]) {
+    return first[0] == second[0] && first[1] == second[1];
+}
+
+void apply_move(int pos[2], int direction, int new_pos[2]) {
+    new_pos[0] = pos[0] + MOVE_DELTA[direction][0],
+    new_pos[1] = pos[1] + MOVE_DELTA[direction][1];
 
     // Reverse the direction if we go out of the bounds
     if (new_pos[0] < 0)
@@ -71,44 +73,59 @@ void generate_new_pos(int pos[2], int new_pos[2]) {
 }
 
 void update_positions(int pos[][2], action_t action[], int dest[][2]) {
+    /**
+     * To break ties and avoiding deadlocks, a priority system is implemented.
+     * Agents wanting to stay where they are have the highest priority.
+     * After that agents with lower index have higher priority over agents with lower index.
+     */
+
+    // Make a mutable copy of dest
     int new_pos[AGENT_COUNT][2];
-
-    // Unset all positions
-    for (int i = 0; i < AGENT_COUNT; ++i)
-        new_pos[i][0] = new_pos[i][1] = -1;
-
-    // If any agents wants to stay where it is it is prioritize over moving
-    for (int i = 0; i < AGENT_COUNT; ++i)
-        if (action[i] == ACT_REPAIR ||
-            (action[i] == ACT_MOVE && pos[i][0] == dest[i][0] && pos[i][1] == dest[i][1])) {
-
-            new_pos[i][0] = pos[i][0];
-            new_pos[i][1] = pos[i][1];
-        }
-
-    // Agents with lower index have higher priority if there's a conflict
     for (int i = 0; i < AGENT_COUNT; ++i) {
-        if (action[i] != ACT_MOVE)
-            continue;
+        new_pos[i][0] = dest[i][0];
+        new_pos[i][1] = dest[i][1];
+    }
 
-        bool dest_occupied = false;
+    /**
+     * At each iteration at least one agent's new_pos is set to its previous position
+     * So after at most AGENT_COUNT iterations are conflicts are resolved.
+     */
+    for (int k = 0; k < AGENT_COUNT; ++k) {
 
-        for (int j = 0; j < AGENT_COUNT; ++j)
-            if (new_pos[j][0] != -1 && new_pos[j][1] != -1
-                && dest[i][0] == new_pos[j][0] && dest[i][1] == new_pos[j][1])
-            {
-                dest_occupied = true;
-                break;
+        // Check each destination pair for conflicts
+        for (int i = 0; i < AGENT_COUNT; ++i) {
+            if (action[i] == ACT_DIE)
+                continue;
+
+            for (int j = i+1; j < AGENT_COUNT; ++j) {
+                if (action[j] == ACT_DIE)
+                    continue;
+
+                if (!is_pos_equal(new_pos[i], new_pos[j]))
+                    continue;
+
+                // If an agent wants to stay in its previous position it has priority
+                
+                if (is_pos_equal(pos[i], new_pos[i])) {
+                    // Agent j cannot move because its dest is occupied
+                    new_pos[j][0] = pos[j][0];
+                    new_pos[j][1] = pos[j][1];
+                }
+                else if (is_pos_equal(pos[j], new_pos[j])) {
+                    // Agent i cannot move because its dest is occupied
+                    new_pos[i][0] = pos[i][0];
+                    new_pos[i][1] = pos[i][1];
+                }
+
+                else { 
+                    // Two agents must go to the same new destination
+                    // i is always lower than j so it has higher priority
+                    // so agent j cannot move because its dest is occupied
+                    new_pos[j][0] = pos[j][0];
+                    new_pos[j][1] = pos[j][1];
+                }
+
             }
-
-        // The agent stays where it is if its destination is occupied by a higher priority agent
-        if (dest_occupied) {
-            new_pos[i][0] = pos[i][0];
-            new_pos[i][1] = pos[i][1];
-        }
-        else {
-            new_pos[i][0] = dest[i][0];
-            new_pos[i][1] = dest[i][1];
         }
     }
 
@@ -145,8 +162,9 @@ int agent(shared_mem_t *mem, int id, int target) {
             mem->action[id] = ACT_DIE;
         }
         else if (cell->fixed) {
+            // Choose direction at random
             int new_pos[2];
-            generate_new_pos(pos[id], new_pos);
+            apply_move(pos[id], rand() % DIRECTION_COUNT, new_pos);
 
             mem->action[id] = ACT_MOVE;
             mem->dest[id][0] = new_pos[0];
@@ -154,6 +172,8 @@ int agent(shared_mem_t *mem, int id, int target) {
         }
         else { // Cell needs to be fixed
             mem->action[id] = ACT_REPAIR;
+            mem->dest[id][0] = pos[id][0];
+            mem->dest[id][1] = pos[id][1];
         }
 
         if (mem->action[id] == ACT_DIE) {
@@ -173,7 +193,7 @@ int agent(shared_mem_t *mem, int id, int target) {
             cell->fixed = true;
             fixed[id] ++;
         }
-        else if (pos[id][0] != mem->dest[id][0] || pos[id][1] != mem->dest[id][1]) {
+        else if (!is_pos_equal(pos[id], mem->dest[id])) {
             n_moves ++;
         }
         cell->log[id] = fixed[id];
