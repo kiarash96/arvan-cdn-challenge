@@ -1,10 +1,10 @@
 /**
- * @file librepairmen.h
+ * @file repairmen.h
  * @brief Defines public interface for repairmen grid simulation
  */
 
-#ifndef LIBREPAIRMEN_H_
-#define LIBREPAIRMEN_H_
+#ifndef REPAIRMEN_H_
+#define REPAIRMEN_H_
 
 /** Number of repairmen processes */
 #define AGENT_COUNT 4
@@ -94,5 +94,35 @@ void cleanup_shared_mem(shared_mem_t *mem);
  */
 int agent(shared_mem_t *mem, int id, int target);
 
-#endif // LIBREPAIRMEN_H_
+/**
+ * @brief Check equality between two (x,y) pairs
+ */
+bool is_pos_equal(int first[2], int second[2]);
+
+/**
+ * @brief Set agent positions to network grid corners
+ *
+ * @param[out] pos  Pointer to array containing starting positions as (x,y) pairs
+ */
+void initialize_starting_pos(int pos[][2]);
+
+/**
+ * @brief Apply a directional move on a position
+ *
+ * @param[in] pos       Current (x,y) position
+ * @param[in] dir       Index for direction of move in MOVE_DELTA array
+ * @param[out] new_pos  Pointer to array containing new position after move
+ */
+void apply_move(int pos[2], int dir, int new_pos[2]);
+
+/**
+ * @brief Update all agents positions without overlapping simultaneously
+ *
+ * @param[in,out] pos   Current (x,y) postion
+ * @param[in] action    Array containing actions for each agent
+ * @param[in] dest      Proposed destination for each agent
+ */
+void update_positions(int pos[][2], action_t action[], int dest[][2]);
+
+#endif // REPAIRMEN_H_
 
